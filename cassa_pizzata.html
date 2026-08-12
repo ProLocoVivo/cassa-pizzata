@@ -1,7 +1,9 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
+<!-- NIENTE apple-mobile-web-app-capable: in modalita' standalone (avvio dall'icona
+     della schermata Home) iOS non permette di stampare, window.print() resta muto.
+     Senza questo meta l'icona apre in Safari, dove la stampa funziona. -->
 <title>Cassa - Pizza in piazza</title>
 <style id="pagina">@page { size: A4 portrait; margin: 12mm; }</style>
 <style>
@@ -87,6 +89,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
 .btn-s.pericolo { color: #8a1c1c; border-color: #dcbcbc; font-weight: 500; }
 .avviso { display: none; background: #fdf2e2; border: 1px solid #d9a54a; border-radius: 10px;
           padding: 12px 14px; margin-bottom: 12px; font-size: 13.5px; line-height: 1.5; color: #5a3d0c; }
+.avviso.grave { background: #fbe9e7; border-color: #c0392b; color: #7b1f14; }
 
 @media (max-width: 560px) {
   .griglia, .azioni { grid-template-columns: 1fr 1fr; }
@@ -155,6 +158,12 @@ body.a5 .hd td.r { font-size: 7.5pt; }
   <div class="avviso" id="avvisoMem">
     <b>Questo dispositivo non sta salvando i dati.</b> Se chiudi o ricarichi la pagina perdi tutte
     le comande registrate e le statistiche. Le matrici infilzate restano l'unica cassa affidabile.
+  </div>
+
+  <div class="avviso grave" id="avvisoStampa">
+    <b>Da qui non si pu&ograve; stampare.</b> Hai aperto la cassa dall'icona della schermata Home:
+    in questa modalit&agrave; iOS non consente la stampa. Elimina l'icona e apri l'indirizzo
+    direttamente in <b>Safari</b>, poi rifai Aggiungi a Home.
   </div>
 
   <div class="modo">
@@ -558,6 +567,15 @@ function pulisciStampa() {
   document.body.classList.remove("a5", "stampaTavolo", "stampaAsporto", "stampaChiusura");
 }
 
+/* Avviata dall'icona della schermata Home: iOS non stampa e window.print() non
+   dice niente. Meglio fermarsi qui che registrare una comanda mai uscita. */
+function stampaImpossibile() {
+  if (window.navigator.standalone !== true) return false;
+  alert("Da qui iOS non permette di stampare.\n\n" +
+        "Apri l'indirizzo in Safari invece che dall'icona della schermata Home.");
+  return true;
+}
+
 // manda in stampa i tagliandi gia' composti: non registra e non tocca i campi
 function esegui(formato, tipo) {
   pulisciStampa();
@@ -570,6 +588,7 @@ function esegui(formato, tipo) {
 }
 
 function stampa(formato) {
+  if (stampaImpossibile()) return;          // prima di registrare: niente comande fantasma
   if (modo === "tavolo" && (!el("tavolo").value || !coperti())) { alert("Manca il tavolo o i coperti."); return; }
   if (modo === "asporto" && (!el("nome").value.trim() || !totPizze())) { alert("Manca il nome o le pizze."); return; }
   var o = comandaDaForm(Date.now());
@@ -585,6 +604,7 @@ el("stampaA4").addEventListener("click", function () { stampa("a4"); });
 el("stampaA5").addEventListener("click", function () { stampa("a5"); });
 
 el("btnRistampa").addEventListener("click", function () {
+  if (stampaImpossibile()) return;
   if (!ordini.length) { alert("Nessuna comanda da ristampare."); return; }
   var o = ordini[ordini.length - 1];
   if (!confirm("Ristampo la comanda " + o.n + " delle " + oraDi(o.ts) + " (" + eur(o.tot) +
@@ -650,6 +670,7 @@ function chiusuraHTML(s) {
 }
 
 el("btnChiusura").addEventListener("click", function () {
+  if (stampaImpossibile()) return;
   if (!ordini.length) { alert("Nessuna comanda registrata."); return; }
   el("chiusura").innerHTML = chiusuraHTML(stat());
   pulisciStampa();
@@ -705,6 +726,9 @@ el("reset").addEventListener("click", function () {
   } catch (e) { ok = false; }
   if (!ok) el("avvisoMem").style.display = "block";
 })();
+
+// avviata dall'icona della schermata Home: qui la stampa non esiste
+if (window.navigator.standalone === true) el("avvisoStampa").style.display = "block";
 
 var v;
 if ((v = mem("pip_num"))) el("num").value = v;
