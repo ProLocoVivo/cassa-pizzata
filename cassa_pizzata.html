@@ -197,7 +197,7 @@ body.a5 .hd td.r { font-size: 7.5pt; }
     </div>
     <div style="margin-top:10px">
       <label>Nome del gruppo
-        <span style="color:#9a6b12">&mdash; il cameriere lo chiama al tavolo</span></label>
+        <span style="color:#9a6b12">&mdash; obbligatorio, il cameriere lo chiama al tavolo</span></label>
       <input type="text" id="nomeTav" autocomplete="off" placeholder="es. Bartoletti">
     </div>
   </div>
@@ -845,6 +845,14 @@ function esegui(formato, tipo) {
 function stampa(formato) {
   if (stampaImpossibile()) return;          // prima di registrare: niente comande fantasma
   if (modo === "tavolo" && (!el("tavolo").value || !coperti())) { alert("Manca il tavolo o i coperti."); return; }
+  // senza nome il tagliando torna a identificare un posto invece di un gruppo,
+  // ed e' cosi' che le pizze finivano al tavolo sbagliato
+  if (modo === "tavolo" && !el("nomeTav").value.trim()) {
+    alert("Manca il nome del gruppo.\n\nVa bene qualunque cosa li distingua: " +
+          "un cognome, \"due signore\", \"cappello rosso\".");
+    el("nomeTav").focus();
+    return;
+  }
   if (modo === "asporto" && (!el("nome").value.trim() || !totPizze())) { alert("Manca il nome o le pizze."); return; }
   var o = comandaDaForm(Date.now());
   componi(o);
