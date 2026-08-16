@@ -137,9 +137,13 @@ body.a5 .hd td.r { font-size: 7.5pt; }
 
 /* ---------- chiusura ---------- */
 #chiusura { display: none; }
-#chiusura h2 { font-size: 15pt; margin: 0 0 3mm; }
-#chiusura .ct { width: 100%; border-collapse: collapse; font-size: 10.5pt; margin-bottom: 5mm; }
-#chiusura .ct td { padding: 1.8mm 1mm; border-bottom: .5pt solid #ccc; }
+#chiusura h2 { font-size: 14pt; margin: 0 0 2mm; }
+/* la sezione non si stacca mai dal suo titolo, e le tabelle non si spezzano:
+   il resoconto sta su due fogli, ma l'interruzione cade fra una sezione e l'altra */
+#chiusura h3 { font-size: 11pt; margin: 0 0 1.5mm; page-break-after: avoid; }
+#chiusura .ct { width: 100%; border-collapse: collapse; font-size: 10.5pt;
+                margin-bottom: 4mm; page-break-inside: avoid; }
+#chiusura .ct td { padding: 1.5mm 1mm; border-bottom: .5pt solid #ccc; }
 #chiusura .ct td.n { text-align: right; font-weight: bold; }
 
 @media print {
@@ -206,6 +210,15 @@ body.a5 .hd td.r { font-size: 7.5pt; }
       <button id="stampaA5">Stampa A5<span><small>fogli separati</small></span></button>
       <button id="nuova">Nuova<span><small>senza stampare</small></span></button>
     </div>
+  </div>
+
+  <div class="card">
+    <div class="prTop">
+      <div><h2 style="margin:0">Compenso pizzaiola</h2></div>
+      <button class="btn-s" id="sbloccaCompenso">Modifica tariffe</button>
+    </div>
+    <div id="listaCompenso" style="display:none"></div>
+    <table class="tabella" id="tabCompenso"></table>
   </div>
 
   <div class="card">
@@ -326,6 +339,19 @@ var MENU = ["Margherita", "Bianca con crudo", "Margherita con salsiccia",
 var PREZZI_DEF = [7, 9, 9, 9, 7];
 var MARGINE_A5 = "10mm";
 
+/* Conto della pizzaiola. Si paga a pizza fatta, con quattro tariffe: sull'asporto
+   il prezzo e' il suo e lo giriamo senza ricarico, sul menu' e' diverso perche'
+   comprende il ciaccino dell'antipasto. Solo la Margherita conta come margherita:
+   la Napoli sta fra le farcite (deciso il 16/8/2026, non e' un refuso). */
+var MARGHERITA = [true, false, false, false, false];
+var COMPENSO = [
+  { k: "aspM",  et: "Asporto — margherite", tipo: "asporto", marg: true  },
+  { k: "aspF",  et: "Asporto — farcite",    tipo: "asporto", marg: false },
+  { k: "menuM", et: "Menù — margherite", tipo: "tavolo", marg: true  },
+  { k: "menuF", et: "Menù — farcite",    tipo: "tavolo", marg: false }
+];
+var compensoCorrenti = [0, 0, 0, 0];
+
 var ordini = [];            // storico comande
 var modo = "tavolo";
 var prezziAperti = false;
@@ -429,6 +455,58 @@ el("sbloccaPrezzi").addEventListener("click", function () {
   this.classList.toggle("attivo", prezziAperti);
 });
 
+/* ---------- compenso pizzaiola ---------- */
+var listaCompenso = el("listaCompenso");
+COMPENSO.forEach(function (g, i) {
+  var r = document.createElement("div");
+  r.className = "prz";
+  r.innerHTML = "<span>" + g.et + '</span>&euro; <input type="text" inputmode="decimal" ' +
+    'autocomplete="off" id="cp' + i + '" value="0">';
+  listaCompenso.appendChild(r);
+});
+function indiceCompenso(t) {
+  return (t && t.id && t.id.indexOf("cp") === 0) ? parseInt(t.id.slice(2), 10) : -1;
+}
+listaCompenso.addEventListener("input", function (e) {
+  var i = indiceCompenso(e.target); if (i < 0) return;
+  var n = numeroDa(e.target.value);
+  if (n !== null) {                       // vale la stessa regola dei prezzi di vendita
+    compensoCorrenti[i] = n;
+    mem("pip_compenso", JSON.stringify(compensoCorrenti));
+  }
+  tabellaCompenso();
+});
+listaCompenso.addEventListener("focusout", function (e) {
+  var i = indiceCompenso(e.target); if (i < 0) return;
+  e.target.value = mostraPrezzo(compensoCorrenti[i]);
+});
+el("sbloccaCompenso").addEventListener("click", function () {
+  var aperto = listaCompenso.style.display !== "none";
+  listaCompenso.style.display = aperto ? "none" : "block";
+  this.textContent = aperto ? "Modifica tariffe" : "Chiudi tariffe";
+  this.classList.toggle("attivo", !aperto);
+});
+
+function righeCompenso(s) {
+  return COMPENSO.map(function (g, i) {
+    var n = s.gruppi[g.k];
+    return { et: g.et, n: n, p: compensoCorrenti[i], imp: n * compensoCorrenti[i] };
+  });
+}
+function totaleCompenso(s) {
+  return righeCompenso(s).reduce(function (a, r) { return a + r.imp; }, 0);
+}
+function tabellaCompenso() {
+  var s = stat();
+  var righe = righeCompenso(s).map(function (r) {
+    return "<tr><td>" + r.et + '</td><td class="n">' + r.n +
+      '</td><td class="n">' + eur(r.p) + '</td><td class="n">' + eur(r.imp) + "</td></tr>";
+  }).join("");
+  righe += '<tr class="riga-tot"><td>Da dare alla pizzaiola</td><td class="n"></td>' +
+    '<td class="n"></td><td class="n">' + eur(totaleCompenso(s)) + "</td></tr>";
+  el("tabCompenso").innerHTML = righe;
+}
+
 /* ---------- modalita ---------- */
 function setModo(m) {
   modo = m;
@@ -447,12 +525,17 @@ el("mAsporto").addEventListener("click", function () { setModo("asporto"); });
 /* ---------- statistiche ---------- */
 function stat() {
   var s = { nT: 0, nA: 0, coperti: 0, pizzeT: 0, pizzeA: 0, incT: 0, incA: 0,
-            pizze: MENU.map(function () { return 0; }), ore: {} };
+            pizze: MENU.map(function () { return 0; }),
+            gruppi: { aspM: 0, aspF: 0, menuM: 0, menuF: 0 }, ore: {} };
   ordini.forEach(function (o) {
     var np = o.q.reduce(function (a, b) { return a + b; }, 0);
     if (o.tipo === "tavolo") { s.nT++; s.coperti += o.coperti; s.incT += o.tot; s.pizzeT += np; }
     else { s.nA++; s.incA += o.tot; s.pizzeA += np; }
-    o.q.forEach(function (v, i) { s.pizze[i] += v; });
+    o.q.forEach(function (v, i) {
+      s.pizze[i] += v;
+      // conteggio per il compenso: canale (asporto/menu) incrociato col gruppo
+      s.gruppi[(o.tipo === "tavolo" ? "menu" : "asp") + (MARGHERITA[i] ? "M" : "F")] += v;
+    });
     var h = new Date(o.ts).getHours();
     if (!s.ore[h]) s.ore[h] = { n: 0, pizze: 0, cop: 0, inc: 0 };
     s.ore[h].n++; s.ore[h].pizze += np; s.ore[h].cop += o.coperti || 0; s.ore[h].inc += o.tot;
@@ -489,6 +572,7 @@ function pannello() {
   }).join("");
   righe += '<tr class="riga-tot"><td>Totale pizze</td><td class="n">' + s.pizzeTot + "</td></tr>";
   el("tabPizze").innerHTML = righe;
+  tabellaCompenso();
 }
 
 /* ---------- composizione tagliandi ---------- */
@@ -640,23 +724,40 @@ function chiusuraHTML(s) {
     '<div style="font-size:9.5pt;margin-bottom:5mm">Gioved&igrave; 13 agosto &middot; stampata il ' +
       due(oggi.getDate()) + "/" + due(oggi.getMonth() + 1) + "/" + oggi.getFullYear() + " alle " + oraDi(oggi.getTime()) + "</div>" +
 
-    "<h3 style='font-size:11pt;margin:0 0 2mm'>Incasso</h3>" +
+    "<h3>Incasso</h3>" +
     '<table class="ct">' +
       '<tr><td>Tavoli &mdash; ' + s.nT + " comande, " + s.coperti + ' coperti</td><td class="n">' + eur(s.incT) + "</td></tr>" +
       '<tr><td>Asporto &mdash; ' + s.nA + " comande, " + s.pizzeA + ' pizze</td><td class="n">' + eur(s.incA) + "</td></tr>" +
       '<tr><td><b>TOTALE INCASSATO</b></td><td class="n"><b>' + eur(s.inc) + "</b></td></tr>" +
     "</table>" +
 
-    "<h3 style='font-size:11pt;margin:0 0 2mm'>Pizze per tipo</h3>" +
+    "<h3>Pizze per tipo</h3>" +
     '<table class="ct">' + righe +
       '<tr><td><b>Totale</b></td><td class="n"><b>' + s.pizzeTot + '</b></td><td class="n"></td></tr></table>' +
 
-    "<h3 style='font-size:11pt;margin:0 0 2mm'>Afflusso per ora</h3>" +
+    "<h3>Compenso pizzaiola</h3>" +
+    '<table class="ct">' +
+      '<tr><td><b>Pizze fatte</b></td><td class="n"><b>N.</b></td>' +
+        '<td class="n"><b>Tariffa</b></td><td class="n"><b>Importo</b></td></tr>' +
+      righeCompenso(s).map(function (r) {
+        return "<tr><td>" + r.et + '</td><td class="n">' + r.n + '</td><td class="n">' +
+          eur(r.p) + '</td><td class="n">' + eur(r.imp) + "</td></tr>";
+      }).join("") +
+      '<tr><td><b>DA DARE ALLA PIZZAIOLA</b></td><td class="n"></td><td class="n"></td>' +
+        '<td class="n"><b>' + eur(totaleCompenso(s)) + "</b></td></tr>" +
+      '<tr><td>Incasso meno compenso, al lordo delle altre spese</td><td class="n"></td>' +
+        '<td class="n"></td><td class="n">' + eur(s.inc - totaleCompenso(s)) + "</td></tr>" +
+    "</table>" +
+    "<div style='font-size:8.5pt;margin:-3mm 0 5mm;color:#444'>" +
+      "Sull'asporto la tariffa &egrave; la sua, girata senza ricarico. " +
+      "Sul men&ugrave; comprende il ciaccino dell'antipasto.</div>" +
+
+    "<h3>Afflusso per ora</h3>" +
     '<table class="ct"><tr><td><b>Fascia</b></td><td class="n"><b>Comande</b></td>' +
       '<td class="n"><b>Pizze</b></td><td class="n"><b>Incasso</b></td></tr>' +
       (oreRighe || '<tr><td colspan="4">Nessun dato</td></tr>') + "</table>" +
 
-    "<h3 style='font-size:11pt;margin:0 0 2mm'>Note per la prossima edizione</h3>" +
+    "<h3>Note per la prossima edizione</h3>" +
     '<table class="ct">' +
       '<tr><td>Ora di picco</td><td class="n">' + picco + "</td></tr>" +
       '<tr><td>Coperti medi per tavolo</td><td class="n">' + medioT.toFixed(1) + "</td></tr>" +
@@ -741,6 +842,16 @@ if ((v = mem("pip_prezzi"))) {
       if (n === null || i >= prezziCorrenti.length) return;
       prezziCorrenti[i] = n;
       if (el("pr" + i)) el("pr" + i).value = mostraPrezzo(n);
+    });
+  } catch (e) {}
+}
+if ((v = mem("pip_compenso"))) {
+  try {
+    JSON.parse(v).forEach(function (p, i) {
+      var n = numeroDa(p);
+      if (n === null || i >= compensoCorrenti.length) return;
+      compensoCorrenti[i] = n;
+      if (el("cp" + i)) el("cp" + i).value = mostraPrezzo(n);
     });
   } catch (e) {}
 }

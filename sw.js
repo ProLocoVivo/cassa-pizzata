@@ -6,7 +6,7 @@
    >>> SE MODIFICHI cassa_pizzata.html, CAMBIA IL NUMERO DI VERSIONE QUI SOTTO <<<
    E' quello che dice al browser di buttare la vecchia copia e riscaricare.
    Senza, l'iPad continua a mostrare la versione di prima. */
-var CACHE = "cassa-pizzata-v2";
+var CACHE = "cassa-pizzata-v3";
 var FILE = "./cassa_pizzata.html";
 
 self.addEventListener("install", function (e) {
