@@ -201,7 +201,24 @@ body.a5 .hd td.r { font-size: 7.5pt; }
     <div id="listaPrezzi"></div>
   </div>
 
+  <div class="card" id="boxNote">
+    <label>Note e varianti <span style="color:#9a6b12">&mdash; finiscono sul tagliando del forno</span></label>
+    <input type="text" id="note" autocomplete="off"
+           placeholder="es. una ben cotta, una senza acciughe">
+  </div>
+
   <div class="card" id="listaPizze"></div>
+
+  <div class="card" id="boxExtra" style="display:none">
+    <div class="prTop">
+      <div>
+        <label style="margin-bottom:3px">Pizze extra fuori men&ugrave;</label>
+        <div id="riassuntoExtra" class="prRiass"></div>
+      </div>
+      <button class="btn-s" id="sbloccaExtra">Aggiungi extra</button>
+    </div>
+    <div id="listaExtra" style="display:none"></div>
+  </div>
 
   <div class="card">
     <div class="tot"><span id="etTot">Totale da incassare</span><b id="totale">&euro; 0,00</b></div>
@@ -252,6 +269,7 @@ body.a5 .hd td.r { font-size: 7.5pt; }
       <tr><td class="v" id="p1num"></td><td></td><td class="v" id="p1tav"></td><td></td></tr>
     </table>
     <table class="pz"><tbody id="p1pizze"></tbody></table>
+    <div class="nota" id="p1note"></div>
     <div class="ora" id="p1ora"></div>
   </div>
 
@@ -263,7 +281,7 @@ body.a5 .hd td.r { font-size: 7.5pt; }
       <tr><td width="22%">N&deg; COMANDA</td><td width="4%"></td><td width="18%">TAVOLO</td><td width="4%"></td><td width="18%">COPERTI</td><td width="6%"></td><td width="28%">INCASSATO</td></tr>
       <tr><td class="v s" id="p2num"></td><td></td><td class="v s" id="p2tav"></td><td></td><td class="v s" id="p2cop"></td><td></td><td class="v s" id="p2tot"></td></tr>
     </table>
-    <div class="nota">Coperti &times; &euro; 20,00 &mdash; men&ugrave; fisso</div>
+    <div class="nota">Coperti &times; &euro; 20,00 &mdash; men&ugrave; fisso<span id="p2extra"></span></div>
     <div class="ora" id="p2ora"></div>
   </div>
 
@@ -276,6 +294,8 @@ body.a5 .hd td.r { font-size: 7.5pt; }
       <tr><td class="v" id="p3tav"></td><td></td><td class="v s" id="p3num"></td><td></td><td class="v s" id="p3cop"></td><td></td><td class="v s" id="p3tot"></td></tr>
     </table>
     <table class="pz"><tbody id="p3pizze"></tbody></table>
+    <div id="p3extra"></div>
+    <div class="nota" id="p3note"></div>
     <div class="nota">Antipasto e bevande si ritirano al banco accanto alla cassa.<br>
       Per il dolce, staccare il buono qui sotto e consegnarlo a un cameriere.</div>
     <div class="strappo">
@@ -297,6 +317,7 @@ body.a5 .hd td.r { font-size: 7.5pt; }
       <tr><td class="v" id="a1num"></td><td></td><td class="v n" id="a1nome"></td></tr>
     </table>
     <table class="pz"><tbody id="a1pizze"></tbody></table>
+    <div class="nota" id="a1note"></div>
     <div class="ora" id="a1ora"></div>
   </div>
 
@@ -321,6 +342,7 @@ body.a5 .hd td.r { font-size: 7.5pt; }
     </table>
     <table class="pz"><tbody id="a3pizze"></tbody></table>
     <table class="tt"><tr><td>TOTALE PAGATO</td><td class="r" id="a3tt"></td></tr></table>
+    <div class="nota" id="a3note"></div>
     <div class="nota">Ritiro al banco del forno. Conservare questo tagliando fino alla consegna.</div>
     <div class="ora" id="a3ora"></div>
   </div>
@@ -387,7 +409,42 @@ lista.addEventListener("click", function (e) {
 });
 lista.addEventListener("input", aggiornaTotale);
 
+/* ---------- pizze extra fuori menu' (solo ai tavoli) ----------
+   Si pagano a prezzo asporto e vanno in forno con le altre, ma NON danno diritto
+   ne' al dolce ne' all'antipasto: quelli restano appesi ai coperti. */
+var listaExtra = el("listaExtra");
+MENU.forEach(function (nome, i) {
+  var r = document.createElement("div");
+  r.className = "pizza";
+  r.innerHTML = "<span>" + nome + "</span>" +
+    '<button type="button" data-i="' + i + '" data-d="-1">&minus;</button>' +
+    '<input type="number" inputmode="numeric" id="x' + i + '" value="0" min="0">' +
+    '<button type="button" data-i="' + i + '" data-d="1">+</button>';
+  listaExtra.appendChild(r);
+});
+listaExtra.addEventListener("click", function (e) {
+  var b = e.target.closest("button"); if (!b) return;
+  var q = el("x" + b.dataset.i);
+  q.value = Math.max(0, (parseInt(q.value, 10) || 0) + parseInt(b.dataset.d, 10));
+  aggiornaTotale();
+});
+listaExtra.addEventListener("input", aggiornaTotale);
+el("sbloccaExtra").addEventListener("click", function () {
+  var aperto = listaExtra.style.display !== "none";
+  listaExtra.style.display = aperto ? "none" : "block";
+  this.textContent = aperto ? "Aggiungi extra" : "Chiudi extra";
+  this.classList.toggle("attivo", !aperto);
+});
+function chiudiExtra() {
+  listaExtra.style.display = "none";
+  el("sbloccaExtra").textContent = "Aggiungi extra";
+  el("sbloccaExtra").classList.remove("attivo");
+}
+
 function qta(i) { return parseInt(el("q" + i).value, 10) || 0; }
+function qtaX(i) { return parseInt(el("x" + i).value, 10) || 0; }
+function totExtraPezzi() { var t = 0; MENU.forEach(function (n, i) { t += qtaX(i); }); return t; }
+function totExtraEuro() { var t = 0; MENU.forEach(function (n, i) { t += qtaX(i) * prezzo(i); }); return t; }
 function totPizze() { var t = 0; MENU.forEach(function (n, i) { t += qta(i); }); return t; }
 function coperti() { return parseInt(el("coperti").value, 10) || 0; }
 
@@ -402,11 +459,23 @@ function numeroDa(txt) {
 function mostraPrezzo(n) { return String(n).replace(".", ","); }
 function prezzo(i) { return prezziCorrenti[i]; }
 function importo() {
-  if (modo === "tavolo") return coperti() * PREZZO_MENU;
+  if (modo === "tavolo") return coperti() * PREZZO_MENU + totExtraEuro();
   var t = 0; MENU.forEach(function (n, i) { t += qta(i) * prezzo(i); });
   return t;
 }
-function aggiornaTotale() { el("totale").textContent = eur(importo()); }
+function aggiornaTotale() {
+  el("totale").textContent = eur(importo());
+  if (modo === "tavolo") {
+    var n = totExtraPezzi();
+    el("etTot").textContent = n
+      ? "Coperti × 20 + " + n + (n === 1 ? " extra" : " extra")
+      : "Totale (coperti × 20)";
+    el("riassuntoExtra").textContent = n
+      ? n + (n === 1 ? " pizza extra" : " pizze extra") + " — " + eur(totExtraEuro()) +
+        " (prezzi asporto, niente dolce né antipasto)"
+      : "Nessuna. Si pagano a prezzo asporto e non danno dolce né antipasto.";
+  }
+}
 el("coperti").addEventListener("input", aggiornaTotale);
 
 /* ---------- prezzi ---------- */
@@ -515,8 +584,10 @@ function setModo(m) {
   el("boxTavolo").style.display = m === "tavolo" ? "" : "none";
   el("boxAsporto").style.display = m === "asporto" ? "" : "none";
   el("boxPrezzi").style.display = m === "asporto" ? "" : "none";
+  el("boxExtra").style.display = m === "tavolo" ? "" : "none";
   el("etTot").textContent = m === "tavolo" ? "Totale (coperti \u00d7 20)" : "Totale";
   chiudiPrezzi();
+  chiudiExtra();
   aggiornaTotale();
 }
 el("mTavolo").addEventListener("click", function () { setModo("tavolo"); });
@@ -524,24 +595,40 @@ el("mAsporto").addEventListener("click", function () { setModo("asporto"); });
 
 /* ---------- statistiche ---------- */
 function stat() {
-  var s = { nT: 0, nA: 0, coperti: 0, pizzeT: 0, pizzeA: 0, incT: 0, incA: 0,
+  var s = { nT: 0, nA: 0, coperti: 0, pizzeT: 0, pizzeA: 0, pizzeX: 0,
+            incT: 0, incA: 0, incX: 0, nX: 0,
             pizze: MENU.map(function () { return 0; }),
             gruppi: { aspM: 0, aspF: 0, menuM: 0, menuF: 0 }, ore: {} };
   ordini.forEach(function (o) {
     var np = o.q.reduce(function (a, b) { return a + b; }, 0);
-    if (o.tipo === "tavolo") { s.nT++; s.coperti += o.coperti; s.incT += o.tot; s.pizzeT += np; }
-    else { s.nA++; s.incA += o.tot; s.pizzeA += np; }
+    var qx = o.qx || [];
+    var nx = qx.reduce(function (a, b) { return a + (b || 0); }, 0);
+    var tx = o.totX || 0;
+    if (o.tipo === "tavolo") {
+      // il menu' vale l'incasso meno le extra: quelle vanno contate a parte
+      s.nT++; s.coperti += o.coperti; s.incT += o.tot - tx; s.pizzeT += np;
+      if (nx) { s.nX++; s.incX += tx; s.pizzeX += nx; }
+    } else { s.nA++; s.incA += o.tot; s.pizzeA += np; }
+
     o.q.forEach(function (v, i) {
       s.pizze[i] += v;
-      // conteggio per il compenso: canale (asporto/menu) incrociato col gruppo
+      // per il compenso: canale (asporto/menu) incrociato col gruppo (margherita/farcita)
       s.gruppi[(o.tipo === "tavolo" ? "menu" : "asp") + (MARGHERITA[i] ? "M" : "F")] += v;
     });
+    // le extra sono pizze a tutti gli effetti, ma si pagano a tariffa asporto:
+    // niente ciaccino dentro, quindi finiscono nelle righe asporto del compenso
+    qx.forEach(function (v, i) {
+      if (!v) return;
+      s.pizze[i] += v;
+      s.gruppi["asp" + (MARGHERITA[i] ? "M" : "F")] += v;
+    });
+
     var h = new Date(o.ts).getHours();
     if (!s.ore[h]) s.ore[h] = { n: 0, pizze: 0, cop: 0, inc: 0 };
-    s.ore[h].n++; s.ore[h].pizze += np; s.ore[h].cop += o.coperti || 0; s.ore[h].inc += o.tot;
+    s.ore[h].n++; s.ore[h].pizze += np + nx; s.ore[h].cop += o.coperti || 0; s.ore[h].inc += o.tot;
   });
-  s.inc = s.incT + s.incA;
-  s.pizzeTot = s.pizzeT + s.pizzeA;
+  s.inc = s.incT + s.incA + s.incX;
+  s.pizzeTot = s.pizzeT + s.pizzeA + s.pizzeX;
   return s;
 }
 
@@ -576,18 +663,42 @@ function pannello() {
 }
 
 /* ---------- composizione tagliandi ---------- */
-function righePizze(o, soloOrdinate, conPrezzi) {
+function righeDa(quantita, o, soloOrdinate, conPrezzi) {
   var out = "";
   MENU.forEach(function (nome, i) {
-    var q = o.q[i] || 0;
+    var q = (quantita && quantita[i]) || 0;
     if (soloOrdinate && !q) return;
     // comande salvate prima dell'aggiunta di o.prezzi: si ripiega sui prezzi correnti
     var p = (o.prezzi && o.prezzi[i] != null) ? o.prezzi[i] : prezzo(i);
     out += "<tr><td>" + nome + '</td><td class="q">' + (q || "") + "</td>" +
       (conPrezzi ? '<td class="im">' + (q ? eur(q * p) : "") + "</td>" : "") + "</tr>";
   });
+  return out;
+}
+function righePizze(o, soloOrdinate, conPrezzi) {
+  var out = righeDa(o.q, o, soloOrdinate, conPrezzi);
   if (out) return out;
   return '<tr><td>nessuna pizza</td><td class="q"></td>' + (conPrezzi ? '<td class="im"></td>' : "") + "</tr>";
+}
+function nExtra(o) {
+  return (o.qx || []).reduce(function (a, b) { return a + (b || 0); }, 0);
+}
+/* Al forno le extra non sono una categoria: sono pizze da infornare con le altre.
+   Sommandole si risparmia anche il blocco separato, che sull'A4 non ci starebbe. */
+function conExtra(o) {
+  return MENU.map(function (n, i) { return (o.q[i] || 0) + ((o.qx && o.qx[i]) || 0); });
+}
+/* Blocco delle extra, solo sulla copia cliente: le sta pagando a parte, quindi
+   deve vederle staccate dal menu'. Se non ce ne sono non occupa un millimetro. */
+function bloccoExtra(o, conPrezzi) {
+  if (!nExtra(o)) return "";
+  return '<div class="nota" style="margin:2mm 0 1mm;font-weight:bold">' +
+    "PIZZE IN PI&Ugrave;, fuori men&ugrave;</div>" +
+    '<table class="pz"><tbody>' + righeDa(o.qx, o, true, conPrezzi) + "</tbody></table>";
+}
+function bloccoNote(o) {
+  if (!o.note) return "";
+  return "<b>NOTE:</b> " + String(o.note).replace(/[<>&]/g, " ");
 }
 
 function componi(o) {
@@ -597,8 +708,15 @@ function componi(o) {
     ["p1tav", "p2tav", "p3tav", "p4tav"].forEach(function (id) { el(id).textContent = o.rif; });
     el("p2cop").textContent = o.coperti; el("p3cop").textContent = o.coperti; el("p4dol").textContent = o.coperti;
     el("p2tot").textContent = tot; el("p3tot").textContent = tot;
-    el("p1pizze").innerHTML = righePizze(o, true, false);
-    el("p3pizze").innerHTML = righePizze(o, false, false);
+    el("p1pizze").innerHTML = righeDa(conExtra(o), o, true, false) ||
+      '<tr><td>nessuna pizza</td><td class="q"></td></tr>';
+    el("p3pizze").innerHTML = righePizze(o, true, false);
+    el("p3extra").innerHTML = bloccoExtra(o, true);
+    el("p1note").innerHTML = bloccoNote(o);
+    el("p3note").innerHTML = bloccoNote(o);
+    el("p2extra").innerHTML = nExtra(o)
+      ? " &middot; pi&ugrave; " + nExtra(o) + " extra fuori menù " + eur(o.totX || 0)
+      : "";
     el("p1ora").textContent = ora; el("p2ora").textContent = ora;
   } else {
     ["a1num", "a2num", "a3num"].forEach(function (id) { el(id).textContent = o.n; });
@@ -607,6 +725,8 @@ function componi(o) {
     el("a2tot").textContent = tot; el("a3tt").textContent = tot;
     el("a1pizze").innerHTML = righePizze(o, true, false);
     el("a3pizze").innerHTML = righePizze(o, true, true);
+    el("a1note").innerHTML = bloccoNote(o);
+    el("a3note").innerHTML = bloccoNote(o);
     el("a1ora").textContent = ora; el("a2ora").textContent = ora; el("a3ora").textContent = ora;
   }
 }
@@ -620,7 +740,11 @@ function comandaDaForm(ts) {
     rif: modo === "tavolo" ? (el("tavolo").value || "") : el("nome").value.trim(),
     coperti: modo === "tavolo" ? coperti() : 0,
     q: MENU.map(function (n, i) { return qta(i); }),
+    // le extra esistono solo ai tavoli; sull'asporto e' gia' tutto a prezzo pizza
+    qx: MENU.map(function (n, i) { return modo === "tavolo" ? qtaX(i) : 0; }),
+    note: el("note").value.trim(),
     prezzi: MENU.map(function (n, i) { return prezzo(i); }),
+    totX: modo === "tavolo" ? totExtraEuro() : 0,
     tot: importo()
   };
 }
@@ -639,8 +763,10 @@ function nuova(senzaFocus) {
     var a = el("numAsp"); a.value = (parseInt(a.value, 10) || 0) + 1; mem("pip_numAsp", a.value);
     el("nome").value = "";
   }
-  MENU.forEach(function (x, i) { el("q" + i).value = 0; });
+  MENU.forEach(function (x, i) { el("q" + i).value = 0; el("x" + i).value = 0; });
+  el("note").value = "";
   chiudiPrezzi();
+  chiudiExtra();
   aggiornaTotale();
   // su iPad il focus programmatico aprirebbe la tastiera dietro il pannello di stampa
   if (!senzaFocus) el(modo === "tavolo" ? "tavolo" : "nome").focus();
@@ -727,6 +853,8 @@ function chiusuraHTML(s) {
     "<h3>Incasso</h3>" +
     '<table class="ct">' +
       '<tr><td>Tavoli &mdash; ' + s.nT + " comande, " + s.coperti + ' coperti</td><td class="n">' + eur(s.incT) + "</td></tr>" +
+      (s.pizzeX ? '<tr><td>Pizze extra ai tavoli &mdash; ' + s.pizzeX +
+        " pizze su " + s.nX + ' comande</td><td class="n">' + eur(s.incX) + "</td></tr>" : "") +
       '<tr><td>Asporto &mdash; ' + s.nA + " comande, " + s.pizzeA + ' pizze</td><td class="n">' + eur(s.incA) + "</td></tr>" +
       '<tr><td><b>TOTALE INCASSATO</b></td><td class="n"><b>' + eur(s.inc) + "</b></td></tr>" +
     "</table>" +
@@ -784,10 +912,15 @@ el("btnChiusura").addEventListener("click", function () {
 el("btnCsv").addEventListener("click", function () {
   if (!ordini.length) { alert("Nessuna comanda registrata."); return; }
   var righe = [["ora", "tipo", "numero", "tavolo/nome", "coperti"]
-    .concat(MENU).concat(["totale"]).join(";")];
+    .concat(MENU).concat(MENU.map(function (n) { return n + " (extra)"; }))
+    .concat(["extra euro", "totale", "note"]).join(";")];
   ordini.forEach(function (o) {
     righe.push([oraDi(o.ts), o.tipo, o.n, o.rif, o.coperti]
-      .concat(o.q).concat([o.tot.toFixed(2).replace(".", ",")]).join(";"));
+      .concat(o.q)
+      .concat(MENU.map(function (n, i) { return (o.qx && o.qx[i]) || 0; }))
+      .concat([(o.totX || 0).toFixed(2).replace(".", ","),
+               o.tot.toFixed(2).replace(".", ","),
+               String(o.note || "").replace(/[;\r\n]/g, " ")]).join(";"));
   });
   var blob = new Blob(["\ufeff" + righe.join("\n")], { type: "text/csv;charset=utf-8" });
   var a = document.createElement("a");
