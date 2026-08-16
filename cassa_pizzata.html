@@ -91,6 +91,20 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
           padding: 12px 14px; margin-bottom: 12px; font-size: 13.5px; line-height: 1.5; color: #5a3d0c; }
 .avviso.grave { background: #fbe9e7; border-color: #c0392b; color: #7b1f14; }
 
+.cmd { border-bottom: 1px solid #f0eee8; }
+.cmd:last-child { border-bottom: 0; }
+.cmd > button { width: 100%; display: flex; gap: 9px; align-items: baseline; text-align: left;
+                padding: 13px 2px; font-family: inherit; font-size: 14px; color: inherit;
+                background: none; border: 0; cursor: pointer; }
+.cmd > button:active { background: #faf9f5; }
+.cmd .num { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 44px; }
+.cmd .chi { flex: 1; color: #4a4841; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmd .imp { font-weight: 600; font-variant-numeric: tabular-nums; }
+.cmd .spia { color: #9a6b12; font-size: 12px; }
+.dett { display: none; padding: 0 2px 14px; font-size: 13px; color: #4a4841; line-height: 1.7; }
+.cmd.aperta .dett { display: block; }
+.dett .rip { margin-top: 10px; }
+
 @media (max-width: 560px) {
   .griglia, .azioni { grid-template-columns: 1fr 1fr; }
   .kpi { grid-template-columns: 1fr 1fr; }
@@ -236,6 +250,21 @@ body.a5 .hd td.r { font-size: 7.5pt; }
     </div>
     <div id="listaCompenso" style="display:none"></div>
     <table class="tabella" id="tabCompenso"></table>
+  </div>
+
+  <div class="card">
+    <div class="prTop">
+      <div>
+        <label style="margin-bottom:3px">Comande registrate</label>
+        <div id="riassuntoCerca" class="prRiass"></div>
+      </div>
+      <button class="btn-s" id="sbloccaCerca">Cerca comanda</button>
+    </div>
+    <div id="pannelloCerca" style="display:none">
+      <input type="text" id="cerca" autocomplete="off" style="margin-top:12px"
+             placeholder="numero, tavolo o nome &mdash; vuoto: tutte">
+      <div id="listaComande"></div>
+    </div>
   </div>
 
   <div class="card">
@@ -660,6 +689,9 @@ function pannello() {
   righe += '<tr class="riga-tot"><td>Totale pizze</td><td class="n">' + s.pizzeTot + "</td></tr>";
   el("tabPizze").innerHTML = righe;
   tabellaCompenso();
+  riassuntoCerca();
+  // se la ricerca e' aperta, si aggiorna da sola invece di mostrare dati vecchi
+  if (el("pannelloCerca").style.display !== "none") elencoComande();
 }
 
 /* ---------- composizione tagliandi ---------- */
@@ -906,6 +938,115 @@ el("btnChiusura").addEventListener("click", function () {
   el("pagina").textContent = "@page { size: A4 portrait; margin: 14mm; }";
   document.body.classList.add("stampaChiusura");
   window.print();
+});
+
+/* ---------- ricerca fra le comande registrate ---------- */
+var MAX_ELENCO = 40;
+
+function testo(v) { return String(v === null || v === undefined ? "" : v); }
+function pulisci(v) { return testo(v).replace(/[<>&]/g, " "); }
+
+function trovaPerTs(ts) {
+  for (var i = 0; i < ordini.length; i++) if (String(ordini[i].ts) === String(ts)) return ordini[i];
+  return null;
+}
+
+function combacia(o, q) {
+  if (!q) return true;
+  return (testo(o.n) + " " + testo(o.rif) + " " + oraDi(o.ts) + " " + testo(o.note))
+    .toLowerCase().indexOf(q) >= 0;
+}
+
+function dettaglio(o) {
+  var out = [];
+  MENU.forEach(function (nome, i) {
+    var q = (o.q && o.q[i]) || 0;
+    if (q) out.push(q + "&times; " + nome);
+  });
+  var righe = out.length ? out.join("<br>") : "<i>nessuna pizza</i>";
+
+  var ex = [];
+  MENU.forEach(function (nome, i) {
+    var q = (o.qx && o.qx[i]) || 0;
+    if (q) ex.push(q + "&times; " + nome);
+  });
+  if (ex.length) {
+    righe += '<br><span style="color:#9a6b12">In pi&ugrave; fuori men&ugrave;: ' +
+      ex.join(", ") + " &mdash; " + eur(o.totX || 0) + "</span>";
+  }
+  if (o.note) righe += '<br><b>Note:</b> ' + pulisci(o.note);
+  if (o.tipo === "tavolo") righe += "<br>" + o.coperti + " coperti &times; " + eur(PREZZO_MENU);
+  righe += "<br><b>Totale incassato " + eur(o.tot) + "</b>";
+  return righe;
+}
+
+function elencoComande() {
+  var q = el("cerca").value.trim().toLowerCase();
+  var trovate = ordini.filter(function (o) { return combacia(o, q); }).reverse();
+
+  if (!ordini.length) { el("listaComande").innerHTML = '<div class="vuoto">Nessuna comanda registrata.</div>'; return; }
+  if (!trovate.length) { el("listaComande").innerHTML = '<div class="vuoto">Nessuna comanda trovata per "' + pulisci(q) + '".</div>'; return; }
+
+  var troppe = trovate.length > MAX_ELENCO;
+  var html = trovate.slice(0, MAX_ELENCO).map(function (o) {
+    var np = (o.q || []).reduce(function (a, b) { return a + b; }, 0) +
+             (o.qx || []).reduce(function (a, b) { return a + (b || 0); }, 0);
+    var spie = ((o.qx || []).some(function (v) { return v; }) ? " +extra" : "") +
+               (o.note ? " ✎" : "");
+    return '<div class="cmd" data-ts="' + o.ts + '">' +
+      '<button type="button" data-apri="' + o.ts + '">' +
+        '<span class="num">' + pulisci(o.n) + "</span>" +
+        '<span class="chi">' + oraDi(o.ts) + " &middot; " +
+          (o.tipo === "tavolo" ? "tavolo " + pulisci(o.rif) + " &middot; " + o.coperti + " cop"
+                               : pulisci(o.rif) || "asporto") +
+          " &middot; " + np + (np === 1 ? " pizza" : " pizze") +
+          '<span class="spia">' + spie + "</span></span>" +
+        '<span class="imp">' + eur(o.tot) + "</span>" +
+      "</button>" +
+      '<div class="dett">' + dettaglio(o) +
+        '<div class="rip"><button class="btn-s" data-ristampa="' + o.ts + '">Ristampa questa comanda</button></div>' +
+      "</div></div>";
+  }).join("");
+
+  if (troppe) html += '<div class="vuoto">Mostrate le ' + MAX_ELENCO + " pi&ugrave; recenti di " +
+    trovate.length + ". Restringi la ricerca per vedere le altre.</div>";
+  el("listaComande").innerHTML = html;
+}
+
+function riassuntoCerca() {
+  var n = ordini.length;
+  el("riassuntoCerca").textContent = n
+    ? n + (n === 1 ? " comanda registrata" : " comande registrate") +
+      ", l'ultima delle " + oraDi(ordini[n - 1].ts)
+    : "Nessuna comanda ancora registrata.";
+}
+
+el("sbloccaCerca").addEventListener("click", function () {
+  var aperto = el("pannelloCerca").style.display !== "none";
+  el("pannelloCerca").style.display = aperto ? "none" : "block";
+  this.textContent = aperto ? "Cerca comanda" : "Chiudi ricerca";
+  this.classList.toggle("attivo", !aperto);
+  if (!aperto) elencoComande();
+});
+el("cerca").addEventListener("input", elencoComande);
+
+el("listaComande").addEventListener("click", function (e) {
+  var b = e.target.closest("button"); if (!b) return;
+
+  if (b.dataset.ristampa) {
+    if (stampaImpossibile()) return;
+    var o = trovaPerTs(b.dataset.ristampa);
+    if (!o) { alert("Comanda non trovata."); return; }
+    if (!confirm("Ristampo la comanda " + o.n + " delle " + oraDi(o.ts) +
+                 " (" + eur(o.tot) + ")?\nNon viene registrata di nuovo.")) return;
+    componi(o);
+    esegui(ultimoFormato, o.tipo);
+    return;
+  }
+  if (b.dataset.apri) {
+    var riga = b.parentNode;
+    riga.classList.toggle("aperta");
+  }
 });
 
 /* ---------- CSV ---------- */
