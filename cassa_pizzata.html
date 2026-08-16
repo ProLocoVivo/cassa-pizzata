@@ -195,6 +195,11 @@ body.a5 .hd td.r { font-size: 7.5pt; }
       <div><label>Tavolo</label><input type="number" id="tavolo" inputmode="numeric"></div>
       <div><label>Coperti</label><input type="number" id="coperti" inputmode="numeric"></div>
     </div>
+    <div style="margin-top:10px">
+      <label>Nome del gruppo
+        <span style="color:#9a6b12">&mdash; il cameriere lo chiama al tavolo</span></label>
+      <input type="text" id="nomeTav" autocomplete="off" placeholder="es. Bartoletti">
+    </div>
   </div>
 
   <div class="card" id="boxAsporto" style="display:none">
@@ -294,8 +299,8 @@ body.a5 .hd td.r { font-size: 7.5pt; }
   <div class="sez">
     <table class="hd"><tr><td>1 &middot; TAGLIANDO FORNO</td><td class="r">&rarr; consegnare alla pizzaiola</td></tr></table>
     <table class="f">
-      <tr><td width="38%">N&deg; COMANDA</td><td width="6%"></td><td width="38%">TAVOLO</td><td width="18%"></td></tr>
-      <tr><td class="v" id="p1num"></td><td></td><td class="v" id="p1tav"></td><td></td></tr>
+      <tr><td width="20%">N&deg; COMANDA</td><td width="4%"></td><td width="16%">TAVOLO</td><td width="4%"></td><td width="56%">NOME &mdash; da chiamare al tavolo</td></tr>
+      <tr><td class="v" id="p1num"></td><td></td><td class="v" id="p1tav"></td><td></td><td class="v n" id="p1nome"></td></tr>
     </table>
     <table class="pz"><tbody id="p1pizze"></tbody></table>
     <div class="nota" id="p1note"></div>
@@ -732,6 +737,11 @@ function bloccoNote(o) {
   if (!o.note) return "";
   return "<b>NOTE:</b> " + String(o.note).replace(/[<>&]/g, " ");
 }
+/* Ai tavoli di sagra il numero di tavolo e' un posto, non un cliente: due gruppi
+   diversi ci passano nella stessa sera, ed e' cosi' che finivano per prendere
+   la roba altrui. Il nome sta in riga con numero e tavolo sul solo tagliando
+   forno: e' il cameriere che deve chiamarlo, e li' non costa un millimetro.
+   Lasciato vuoto resta una riga bianca, che si puo' riempire a penna. */
 
 function componi(o) {
   var ora = "emessa alle " + oraDi(o.ts), tot = eur(o.tot);
@@ -744,6 +754,7 @@ function componi(o) {
       '<tr><td>nessuna pizza</td><td class="q"></td></tr>';
     el("p3pizze").innerHTML = righePizze(o, true, false);
     el("p3extra").innerHTML = bloccoExtra(o, true);
+    el("p1nome").textContent = o.nome || "";
     el("p1note").innerHTML = bloccoNote(o);
     el("p3note").innerHTML = bloccoNote(o);
     el("p2extra").innerHTML = nExtra(o)
@@ -770,6 +781,8 @@ function comandaDaForm(ts) {
     tipo: modo,
     n: modo === "tavolo" ? (el("num").value || "") : "A" + (el("numAsp").value || ""),
     rif: modo === "tavolo" ? (el("tavolo").value || "") : el("nome").value.trim(),
+    // per l'asporto coincide con rif; ai tavoli e' il gruppo da chiamare
+    nome: modo === "tavolo" ? el("nomeTav").value.trim() : el("nome").value.trim(),
     coperti: modo === "tavolo" ? coperti() : 0,
     q: MENU.map(function (n, i) { return qta(i); }),
     // le extra esistono solo ai tavoli; sull'asporto e' gia' tutto a prezzo pizza
@@ -790,7 +803,7 @@ function registra(o) {
 function nuova(senzaFocus) {
   if (modo === "tavolo") {
     var n = el("num"); n.value = (parseInt(n.value, 10) || 0) + 1; mem("pip_num", n.value);
-    el("tavolo").value = ""; el("coperti").value = "";
+    el("tavolo").value = ""; el("coperti").value = ""; el("nomeTav").value = "";
   } else {
     var a = el("numAsp"); a.value = (parseInt(a.value, 10) || 0) + 1; mem("pip_numAsp", a.value);
     el("nome").value = "";
@@ -953,8 +966,8 @@ function trovaPerTs(ts) {
 
 function combacia(o, q) {
   if (!q) return true;
-  return (testo(o.n) + " " + testo(o.rif) + " " + oraDi(o.ts) + " " + testo(o.note))
-    .toLowerCase().indexOf(q) >= 0;
+  return (testo(o.n) + " " + testo(o.rif) + " " + testo(o.nome) + " " +
+          oraDi(o.ts) + " " + testo(o.note)).toLowerCase().indexOf(q) >= 0;
 }
 
 function dettaglio(o) {
@@ -997,8 +1010,10 @@ function elencoComande() {
       '<button type="button" data-apri="' + o.ts + '">' +
         '<span class="num">' + pulisci(o.n) + "</span>" +
         '<span class="chi">' + oraDi(o.ts) + " &middot; " +
-          (o.tipo === "tavolo" ? "tavolo " + pulisci(o.rif) + " &middot; " + o.coperti + " cop"
-                               : pulisci(o.rif) || "asporto") +
+          (o.tipo === "tavolo"
+            ? "tavolo " + pulisci(o.rif) + (o.nome ? " &middot; " + pulisci(o.nome) : "") +
+              " &middot; " + o.coperti + " cop"
+            : pulisci(o.rif) || "asporto") +
           " &middot; " + np + (np === 1 ? " pizza" : " pizze") +
           '<span class="spia">' + spie + "</span></span>" +
         '<span class="imp">' + eur(o.tot) + "</span>" +
@@ -1052,11 +1067,11 @@ el("listaComande").addEventListener("click", function (e) {
 /* ---------- CSV ---------- */
 el("btnCsv").addEventListener("click", function () {
   if (!ordini.length) { alert("Nessuna comanda registrata."); return; }
-  var righe = [["ora", "tipo", "numero", "tavolo/nome", "coperti"]
+  var righe = [["ora", "tipo", "numero", "tavolo/nome", "nome gruppo", "coperti"]
     .concat(MENU).concat(MENU.map(function (n) { return n + " (extra)"; }))
     .concat(["extra euro", "totale", "note"]).join(";")];
   ordini.forEach(function (o) {
-    righe.push([oraDi(o.ts), o.tipo, o.n, o.rif, o.coperti]
+    righe.push([oraDi(o.ts), o.tipo, o.n, o.rif, testo(o.nome).replace(/[;\r\n]/g, " "), o.coperti]
       .concat(o.q)
       .concat(MENU.map(function (n, i) { return (o.qx && o.qx[i]) || 0; }))
       .concat([(o.totX || 0).toFixed(2).replace(".", ","),
